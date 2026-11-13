@@ -1,31 +1,39 @@
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const dotenv = require('dotenv');
 
 dotenv.config();
 
-// Configuración del Pool de conexiones a MySQL
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'hospital_citas',
-  port: Number(process.env.DB_PORT) || 3306,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+// Configuración del Pool para Neon (PostgreSQL Serverless)
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    }
+  : {
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || 'hospital_citas',
+      port: Number(process.env.DB_PORT) || 5432,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
+    };
 
-// Función para verificar la conexión al iniciar el servidor
+const pool = new Pool(poolConfig);
+
+// Prueba de conexión al iniciar
 const testConnection = async () => {
   try {
-    const connection = await pool.getConnection();
-    console.log(`✅ [MySQL] Conexión establecida exitosamente con la base de datos '${process.env.DB_NAME || 'hospital_citas'}'.`);
-    connection.release();
+    const client = await pool.connect();
+    const res = await client.query('SELECT NOW() as now, current_database() as db');
+    console.log(`✅ [Neon / PostgreSQL] Conectado exitosamente a la base de datos '${res.rows[0].db}'. Hora BD: ${res.rows[0].now}`);
+    client.release();
     return true;
   } catch (error) {
-    console.error('❌ [MySQL] Error al conectar con la base de datos MySQL:');
+    console.error('❌ [Neon / PostgreSQL] Error al conectar con la base de datos:');
     console.error(`   Detalle: ${error.message}`);
-    console.error('   Sugerencia: Verifica que el servicio MySQL esté iniciado y las credenciales en .env sean correctas.');
+    console.error('   Sugerencia: Verifica que la variable DATABASE_URL en .env sea la cadena de conexión de Neon.');
     return false;
   }
 };

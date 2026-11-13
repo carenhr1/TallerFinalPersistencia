@@ -59,10 +59,10 @@ const Topbar = ({ activeTab }) => {
               fontSize: '0.8rem',
               fontWeight: 600
             }}
-            title="Conectado a la base de datos relacional MySQL (hospital_citas)"
+            title="Conectado a la base de datos relacional Neon (PostgreSQL)"
           >
             <Database size={15} />
-            <span>MySQL Conectado</span>
+            <span>Neon BD Conectada</span>
           </div>
         ) : (
           <div

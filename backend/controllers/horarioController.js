@@ -3,8 +3,8 @@ const { pool } = require('../config/db');
 // Obtener todos los horarios y salas
 const obtenerHorarios = async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT id_sala, lugar, DATE_FORMAT(fecha, "%Y-%m-%d") as fecha, hora_inicial, hora_final FROM HORARIO ORDER BY fecha ASC, hora_inicial ASC'
+    const { rows } = await pool.query(
+      "SELECT id_sala, lugar, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha, hora_inicial::text, hora_final::text FROM HORARIO ORDER BY fecha ASC, hora_inicial ASC"
     );
     res.json(rows);
   } catch (error) {
@@ -17,9 +17,9 @@ const obtenerHorarios = async (req, res) => {
 const obtenerHorarioPorId = async (req, res) => {
   const { id_sala } = req.params;
   try {
-    const [rows] = await pool.query(
-      'SELECT id_sala, lugar, DATE_FORMAT(fecha, "%Y-%m-%d") as fecha, hora_inicial, hora_final FROM HORARIO WHERE id_sala = ?',
-      [id_sala]
+    const { rows } = await pool.query(
+      "SELECT id_sala, lugar, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha, hora_inicial::text, hora_final::text FROM HORARIO WHERE id_sala = $1",
+      [Number(id_sala)]
     );
 
     if (rows.length === 0) {
@@ -46,20 +46,14 @@ const crearHorario = async (req, res) => {
   }
 
   try {
-    const [result] = await pool.query(
-      'INSERT INTO HORARIO (lugar, fecha, hora_inicial, hora_final) VALUES (?, ?, ?, ?)',
+    const { rows } = await pool.query(
+      "INSERT INTO HORARIO (lugar, fecha, hora_inicial, hora_final) VALUES ($1, $2, $3, $4) RETURNING id_sala, lugar, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha, hora_inicial::text, hora_final::text",
       [lugar.trim(), fecha, hora_inicial, hora_final]
     );
 
     res.status(201).json({
       mensaje: 'Horario registrado exitosamente.',
-      horario: {
-        id_sala: result.insertId,
-        lugar,
-        fecha,
-        hora_inicial,
-        hora_final
-      }
+      horario: rows[0]
     });
   } catch (error) {
     console.error('Error al crear horario:', error);
@@ -81,18 +75,18 @@ const actualizarHorario = async (req, res) => {
   }
 
   try {
-    const [result] = await pool.query(
-      'UPDATE HORARIO SET lugar = ?, fecha = ?, hora_inicial = ?, hora_final = ? WHERE id_sala = ?',
-      [lugar.trim(), fecha, hora_inicial, hora_final, id_sala]
+    const result = await pool.query(
+      "UPDATE HORARIO SET lugar = $1, fecha = $2, hora_inicial = $3, hora_final = $4 WHERE id_sala = $5 RETURNING id_sala, lugar, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha, hora_inicial::text, hora_final::text",
+      [lugar.trim(), fecha, hora_inicial, hora_final, Number(id_sala)]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ mensaje: 'Horario no encontrado.' });
     }
 
     res.json({
       mensaje: 'Horario actualizado exitosamente.',
-      horario: { id_sala: Number(id_sala), lugar, fecha, hora_inicial, hora_final }
+      horario: result.rows[0]
     });
   } catch (error) {
     console.error('Error al actualizar horario:', error);
@@ -105,20 +99,20 @@ const eliminarHorario = async (req, res) => {
   const { id_sala } = req.params;
 
   try {
-    const [citasActivas] = await pool.query(
-      'SELECT id_cita FROM CITA WHERE id_sala = ? AND estado_cita = "Programada"',
-      [id_sala]
+    const citasActivas = await pool.query(
+      'SELECT id_cita FROM CITA WHERE id_sala = $1 AND estado_cita = $2',
+      [Number(id_sala), 'Programada']
     );
 
-    if (citasActivas.length > 0) {
+    if (citasActivas.rows.length > 0) {
       return res.status(400).json({
         mensaje: 'No se puede eliminar el horario porque tiene citas médicas activas asociadas.'
       });
     }
 
-    const [result] = await pool.query('DELETE FROM HORARIO WHERE id_sala = ?', [id_sala]);
+    const result = await pool.query('DELETE FROM HORARIO WHERE id_sala = $1', [Number(id_sala)]);
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ mensaje: 'Horario no encontrado.' });
     }
 

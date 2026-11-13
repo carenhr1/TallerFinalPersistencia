@@ -3,7 +3,7 @@ const { pool } = require('../config/db');
 // Obtener todos los pacientes
 const obtenerPacientes = async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM PACIENTE ORDER BY nombre_completo ASC');
+    const { rows } = await pool.query('SELECT * FROM PACIENTE ORDER BY nombre_completo ASC');
     res.json(rows);
   } catch (error) {
     console.error('Error al obtener pacientes:', error);
@@ -15,8 +15,8 @@ const obtenerPacientes = async (req, res) => {
 const obtenerPacientePorDocumento = async (req, res) => {
   const { documento_identidad } = req.params;
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM PACIENTE WHERE documento_identidad = ?',
+    const { rows } = await pool.query(
+      'SELECT * FROM PACIENTE WHERE documento_identidad = $1',
       [documento_identidad]
     );
 
@@ -40,24 +40,23 @@ const crearPaciente = async (req, res) => {
   }
 
   try {
-    // Validar si ya existe
-    const [existente] = await pool.query(
-      'SELECT documento_identidad FROM PACIENTE WHERE documento_identidad = ?',
+    const existe = await pool.query(
+      'SELECT documento_identidad FROM PACIENTE WHERE documento_identidad = $1',
       [documento_identidad]
     );
 
-    if (existente.length > 0) {
+    if (existe.rows.length > 0) {
       return res.status(400).json({ mensaje: `El paciente con documento ${documento_identidad} ya está registrado.` });
     }
 
-    await pool.query(
-      'INSERT INTO PACIENTE (documento_identidad, nombre_completo, telefono, direccion, genero) VALUES (?, ?, ?, ?, ?)',
+    const { rows } = await pool.query(
+      'INSERT INTO PACIENTE (documento_identidad, nombre_completo, telefono, direccion, genero) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [documento_identidad.trim(), nombre_completo.trim(), telefono.trim(), direccion.trim(), genero]
     );
 
     res.status(201).json({
       mensaje: 'Paciente registrado exitosamente.',
-      paciente: { documento_identidad, nombre_completo, telefono, direccion, genero }
+      paciente: rows[0]
     });
   } catch (error) {
     console.error('Error al crear paciente:', error);
@@ -75,18 +74,18 @@ const actualizarPaciente = async (req, res) => {
   }
 
   try {
-    const [result] = await pool.query(
-      'UPDATE PACIENTE SET nombre_completo = ?, telefono = ?, direccion = ?, genero = ? WHERE documento_identidad = ?',
+    const result = await pool.query(
+      'UPDATE PACIENTE SET nombre_completo = $1, telefono = $2, direccion = $3, genero = $4 WHERE documento_identidad = $5 RETURNING *',
       [nombre_completo.trim(), telefono.trim(), direccion.trim(), genero, documento_identidad]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ mensaje: 'Paciente no encontrado.' });
     }
 
     res.json({
       mensaje: 'Paciente actualizado exitosamente.',
-      paciente: { documento_identidad, nombre_completo, telefono, direccion, genero }
+      paciente: result.rows[0]
     });
   } catch (error) {
     console.error('Error al actualizar paciente:', error);
@@ -99,24 +98,23 @@ const eliminarPaciente = async (req, res) => {
   const { documento_identidad } = req.params;
 
   try {
-    // Verificar si tiene citas activas programadas
-    const [citasActivas] = await pool.query(
-      'SELECT id_cita FROM CITA WHERE documento_paciente = ? AND estado_cita = "Programada"',
-      [documento_identidad]
+    const citasActivas = await pool.query(
+      'SELECT id_cita FROM CITA WHERE documento_paciente = $1 AND estado_cita = $2',
+      [documento_identidad, 'Programada']
     );
 
-    if (citasActivas.length > 0) {
+    if (citasActivas.rows.length > 0) {
       return res.status(400).json({
         mensaje: 'No se puede eliminar el paciente porque tiene citas médicas activas programadas.'
       });
     }
 
-    const [result] = await pool.query(
-      'DELETE FROM PACIENTE WHERE documento_identidad = ?',
+    const result = await pool.query(
+      'DELETE FROM PACIENTE WHERE documento_identidad = $1',
       [documento_identidad]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ mensaje: 'Paciente no encontrado.' });
     }
 

@@ -1,7 +1,7 @@
 {
   "name": "hospital-citas-backend",
   "version": "1.0.0",
-  "description": "Backend API RESTful para el Sistema de Gestión de Citas Médicas con Express y MySQL",
+  "description": "Backend API RESTful para el Sistema de Gestión de Citas Médicas con Express y Neon (PostgreSQL)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,7 +9,8 @@
   },
   "keywords": [
     "express",
-    "mysql2",
+    "neon",
+    "postgresql",
     "hospital",
     "citas",
     "api"
@@ -20,7 +21,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "mysql2": "^3.12.0",
+    "pg": "^8.13.1",
     "sistema-gestion-citas-medicas": "file:.."
   },
   "devDependencies": {

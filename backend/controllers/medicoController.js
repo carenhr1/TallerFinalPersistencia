@@ -3,7 +3,7 @@ const { pool } = require('../config/db');
 // Obtener todos los médicos
 const obtenerMedicos = async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM MEDICO ORDER BY nombre_completo ASC');
+    const { rows } = await pool.query('SELECT * FROM MEDICO ORDER BY nombre_completo ASC');
     res.json(rows);
   } catch (error) {
     console.error('Error al obtener médicos:', error);
@@ -15,8 +15,8 @@ const obtenerMedicos = async (req, res) => {
 const obtenerMedicoPorDocumento = async (req, res) => {
   const { documento_identidad } = req.params;
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM MEDICO WHERE documento_identidad = ?',
+    const { rows } = await pool.query(
+      'SELECT * FROM MEDICO WHERE documento_identidad = $1',
       [documento_identidad]
     );
 
@@ -40,23 +40,23 @@ const crearMedico = async (req, res) => {
   }
 
   try {
-    const [existente] = await pool.query(
-      'SELECT documento_identidad FROM MEDICO WHERE documento_identidad = ?',
+    const existe = await pool.query(
+      'SELECT documento_identidad FROM MEDICO WHERE documento_identidad = $1',
       [documento_identidad]
     );
 
-    if (existente.length > 0) {
+    if (existe.rows.length > 0) {
       return res.status(400).json({ mensaje: `El médico con documento ${documento_identidad} ya está registrado.` });
     }
 
-    await pool.query(
-      'INSERT INTO MEDICO (documento_identidad, nombre_completo, telefono, especialidad) VALUES (?, ?, ?, ?)',
+    const { rows } = await pool.query(
+      'INSERT INTO MEDICO (documento_identidad, nombre_completo, telefono, especialidad) VALUES ($1, $2, $3, $4) RETURNING *',
       [documento_identidad.trim(), nombre_completo.trim(), telefono.trim(), especialidad.trim()]
     );
 
     res.status(201).json({
       mensaje: 'Médico registrado exitosamente.',
-      medico: { documento_identidad, nombre_completo, telefono, especialidad }
+      medico: rows[0]
     });
   } catch (error) {
     console.error('Error al crear médico:', error);
@@ -74,18 +74,18 @@ const actualizarMedico = async (req, res) => {
   }
 
   try {
-    const [result] = await pool.query(
-      'UPDATE MEDICO SET nombre_completo = ?, telefono = ?, especialidad = ? WHERE documento_identidad = ?',
+    const result = await pool.query(
+      'UPDATE MEDICO SET nombre_completo = $1, telefono = $2, especialidad = $3 WHERE documento_identidad = $4 RETURNING *',
       [nombre_completo.trim(), telefono.trim(), especialidad.trim(), documento_identidad]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ mensaje: 'Médico no encontrado.' });
     }
 
     res.json({
       mensaje: 'Médico actualizado exitosamente.',
-      medico: { documento_identidad, nombre_completo, telefono, especialidad }
+      medico: result.rows[0]
     });
   } catch (error) {
     console.error('Error al actualizar médico:', error);
@@ -98,23 +98,23 @@ const eliminarMedico = async (req, res) => {
   const { documento_identidad } = req.params;
 
   try {
-    const [citasActivas] = await pool.query(
-      'SELECT id_cita FROM CITA WHERE documento_medico = ? AND estado_cita = "Programada"',
-      [documento_identidad]
+    const citasActivas = await pool.query(
+      'SELECT id_cita FROM CITA WHERE documento_medico = $1 AND estado_cita = $2',
+      [documento_identidad, 'Programada']
     );
 
-    if (citasActivas.length > 0) {
+    if (citasActivas.rows.length > 0) {
       return res.status(400).json({
         mensaje: 'No se puede eliminar el médico porque tiene citas médicas activas programadas.'
       });
     }
 
-    const [result] = await pool.query(
-      'DELETE FROM MEDICO WHERE documento_identidad = ?',
+    const result = await pool.query(
+      'DELETE FROM MEDICO WHERE documento_identidad = $1',
       [documento_identidad]
     );
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ mensaje: 'Médico no encontrado.' });
     }
 
